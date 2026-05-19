@@ -70,15 +70,18 @@ src/
 dist/                             — Compiled JavaScript output; committed to repo
 .github/
   workflows/
-    example.yml                   — Example workflow showing how to use the action
+    ci.yml                        — Rebuilds dist/ and runs the self-check on src/ changes
+    release.yml                   — Updates the floating major version tag on GitHub release
 ```
 
 ## Building
 
+`dist/` is managed automatically by CI — it rebuilds and commits `dist/index.js` whenever `src/` changes on `main`. For local development only:
+
 ```bash
 npm install
 npm run build
-# Bundles src/ into a single dist/index.js via @vercel/ncc — commit it alongside src/
+# Bundles src/ into a single dist/index.js via @vercel/ncc
 ```
 
 ## Running locally
@@ -108,7 +111,7 @@ Point `INPUT_MANIFEST-FILE` at any `package.json` you want to analyze — it doe
 
 ## Cutting a release
 
-1. Ensure `dist/` is up to date: run `npm run build` and commit if changed.
+1. Merge all changes to `main` — CI will rebuild `dist/` automatically if `src/` changed.
 2. Go to **GitHub → Releases → Draft a new release**.
 3. Set the tag to the next semver (e.g. `v1.0.0`), target branch `main`.
 4. Write release notes and click **Publish release**.

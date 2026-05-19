@@ -1,21 +1,20 @@
-name: Halflife Dependency Check
+name: Halflife CI
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 jobs:
-  halflife:
+  selfcheck:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Check dependency health
-        uses: pjahanlou/halflife@v1
+        uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          manifest-file: package.json
-          include-dev: false
+          include-dev: true
           fail-threshold: 30
           warn-threshold: 60
           download-floor: 500000

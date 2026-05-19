@@ -1,0 +1,21 @@
+name: Halflife Dependency Check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  halflife:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check dependency health
+        uses: pjahanlou/halflife@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          manifest-file: package.json
+          include-dev: false
+          fail-threshold: 30
+          warn-threshold: 60
+          download-floor: 500000

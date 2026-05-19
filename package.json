@@ -1,0 +1,14 @@
+{
+  "name": "halflife",
+  "version": "1.0.0",
+  "description": "GitHub Action: dependency decay checker",
+  "private": true,
+  "scripts": {
+    "build": "ncc build src/index.ts -o dist"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vercel/ncc": "^0.38.0",
+    "typescript": "^5.4.0"
+  }
+}

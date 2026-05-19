@@ -105,3 +105,13 @@ cat /tmp/halflife-summary.md
 ```
 
 Point `INPUT_MANIFEST-FILE` at any `package.json` you want to analyze — it does not have to be this repo's own file.
+
+## Cutting a release
+
+1. Ensure `dist/` is up to date: run `npm run build` and commit if changed.
+2. Go to **GitHub → Releases → Draft a new release**.
+3. Set the tag to the next semver (e.g. `v1.0.0`), target branch `main`.
+4. Write release notes and click **Publish release**.
+5. The release workflow runs automatically and creates/updates the `v1` floating tag.
+
+Users referencing `pjahanlou/halflife@v1` will get the new release on their next workflow run. For breaking changes, bump to `v2.0.0` — the workflow will create a `v2` floating tag automatically.

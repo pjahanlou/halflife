@@ -1,3 +1,4 @@
+import * as core from '@actions/core';
 import { ActionInputs, SkippedPackage } from './types';
 
 export type RegistryResult =
@@ -121,6 +122,7 @@ export async function resolvePackages(
       if (result.status === 'fulfilled') {
         results.set(name, result.value);
       } else {
+        core.warning(`Could not resolve ${name}: ${String(result.reason)}`);
         results.set(name, {
           skipped: { name, reason: 'untrackable', detail: String(result.reason) },
         });

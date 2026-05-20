@@ -4,7 +4,8 @@
   "description": "GitHub Action: dependency decay checker",
   "private": true,
   "scripts": {
-    "build": "ncc build src/index.ts -o dist"
+    "build": "ncc build src/index.ts -o dist",
+    "test": "vitest run"
   },
   "dependencies": {
     "@actions/core": "^1.11.1"
@@ -12,7 +13,8 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@vercel/ncc": "^0.38.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
   },
   "overrides": {
     "undici": "^6.24.0"

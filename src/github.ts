@@ -82,9 +82,25 @@ export async function fetchAllRepoSignals(
   token: string
 ): Promise<Map<string, GitHubResult>> {
   const results = new Map<string, GitHubResult>();
+  const CONCURRENCY = 5;
 
-  for (const { name, slug } of packages) {
-    results.set(name, await fetchRepoSignals(name, slug, token));
+  for (let i = 0; i < packages.length; i += CONCURRENCY) {
+    const batch = packages.slice(i, i + CONCURRENCY);
+    const settled = await Promise.allSettled(
+      batch.map(({ name, slug }) => fetchRepoSignals(name, slug, token))
+    );
+    for (let j = 0; j < batch.length; j++) {
+      const { name } = batch[j];
+      const result = settled[j];
+      if (result.status === 'fulfilled') {
+        results.set(name, result.value);
+      } else {
+        core.warning(`Could not fetch GitHub signals for ${name}: ${String(result.reason)}`);
+        results.set(name, {
+          skipped: { name, reason: 'untrackable', detail: String(result.reason) },
+        });
+      }
+    }
   }
 
   return results;

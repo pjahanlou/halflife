@@ -22,7 +22,7 @@ export interface ScoredPackage {
   status: 'HEALTHY' | 'WATCH' | 'CONCERN' | 'AT RISK' | 'ARCHIVED';
   days_since_push: number;
   open_issues: number;
-  top_signal: string;
+  signals: string[];
 }
 
 export interface ActionInputs {

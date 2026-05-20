@@ -22,7 +22,7 @@ function formatTable(packages: ScoredPackage[]): string {
       `| ${STATUS_EMOJI[pkg.status]} ${pkg.status} ` +
       `| ${pkg.days_since_push} ` +
       `| ${pkg.open_issues} ` +
-      `| ${pkg.top_signal} |`
+      `| ${pkg.signals.join(' · ')} |`
     );
   }
   return lines.join('\n');
@@ -78,7 +78,7 @@ function buildReport(
     lines.push(
       '### Failure Summary',
       `The following ${failing.length} package(s) are ARCHIVED or scored below the fail threshold (${failThreshold}):`,
-      ...failing.map((p) => `- \`${p.name}\` — score **${p.score}** (${p.status}): ${p.top_signal}`),
+      ...failing.map((p) => `- \`${p.name}\` — score **${p.score}** (${p.status}): ${p.signals.join(' · ')}`),
       ''
     );
   }
@@ -87,7 +87,7 @@ function buildReport(
     lines.push(
       '### Warning Summary',
       `The following ${warning.length} package(s) scored below the warn threshold (${warnThreshold}):`,
-      ...warning.map((p) => `- \`${p.name}\` — score **${p.score}** (${p.status}): ${p.top_signal}`),
+      ...warning.map((p) => `- \`${p.name}\` — score **${p.score}** (${p.status}): ${p.signals.join(' · ')}`),
       ''
     );
   }
@@ -106,10 +106,10 @@ export async function writeOutput(
   await core.summary.addRaw(content, true).write();
 
   for (const pkg of warning) {
-    core.warning(`${pkg.name} scored ${pkg.score} (${pkg.status}): ${pkg.top_signal}`);
+    core.warning(`${pkg.name} scored ${pkg.score} (${pkg.status}): ${pkg.signals.join(' · ')}`);
   }
   for (const pkg of failing) {
-    core.error(`${pkg.name} scored ${pkg.score} (${pkg.status}): ${pkg.top_signal}`);
+    core.error(`${pkg.name} scored ${pkg.score} (${pkg.status}): ${pkg.signals.join(' · ')}`);
   }
 
   return failing.length > 0;

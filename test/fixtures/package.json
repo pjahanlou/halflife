@@ -6,7 +6,7 @@
     "moment": "*",
     "request": "*",
     "lodash": "*",
-    "q": "*",
+    "pkginfo": "*",
     "grunt": "*",
     "zod": "*",
     "node-fetch": "*"

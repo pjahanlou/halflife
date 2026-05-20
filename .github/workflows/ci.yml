@@ -1,0 +1,45 @@
+name: Halflife CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Rebuild dist/
+        run: npm ci && npm run build
+
+      - name: Commit dist/ if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/
+          if git diff --staged --quiet; then
+            echo "dist/ unchanged, skipping commit"
+          else
+            git commit -m "chore: rebuild dist"
+            git push
+          fi
+
+      - name: Check dependency health
+        uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          include-dev: true
+          fail-threshold: 30
+          warn-threshold: 60
+          download-floor: 500000

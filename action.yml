@@ -1,0 +1,37 @@
+name: 'Halflife'
+description: 'Scores the health of your open-source npm dependencies using GitHub API signals'
+author: 'halflife-action'
+
+inputs:
+  github-token:
+    description: 'GitHub token used to call the GitHub REST API'
+    required: false
+    default: ${{ github.token }}
+  manifest-file:
+    description: 'Path to the package.json file to analyze'
+    required: false
+    default: 'package.json'
+  include-dev:
+    description: 'Include devDependencies in addition to dependencies'
+    required: false
+    default: 'false'
+  fail-threshold:
+    description: 'Score below this value causes the action to exit with code 1'
+    required: false
+    default: '30'
+  warn-threshold:
+    description: 'Score below this value (but above fail-threshold) triggers a warning'
+    required: false
+    default: '60'
+  download-floor:
+    description: 'Monthly download count above which a package is skipped as established'
+    required: false
+    default: '500000'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
+
+branding:
+  icon: 'activity'
+  color: 'yellow'

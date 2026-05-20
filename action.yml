@@ -1,6 +1,6 @@
-name: 'Halflife'
-description: 'Scores the health of your open-source npm dependencies using GitHub API signals'
-author: 'halflife-action'
+name: 'Halflife: Dependency Decay'
+description: 'Catches unmaintained open source dependencies before they become a liability.'
+author: 'pjahanlou'
 
 inputs:
   github-token:

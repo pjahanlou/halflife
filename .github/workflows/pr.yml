@@ -1,26 +1,25 @@
-name: Halflife CI
+name: PR Check
 
 on:
-  push:
+  pull_request:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'package.json'
 
 permissions:
   contents: write
 
 jobs:
-  build-and-check:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Rebuild dist/
+      - name: Build dist/
         run: npm ci && npm run build
 
       - name: Commit dist/ if changed
@@ -35,11 +34,11 @@ jobs:
             git push
           fi
 
-      - name: Check dependency health
+      - name: Run against fixture
         uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          include-dev: true
-          fail-threshold: 30
-          warn-threshold: 60
-          download-floor: 500000
+          manifest-file: test/fixtures/package.json
+          fail-threshold: 0
+          warn-threshold: 0
+          download-floor: 999999999

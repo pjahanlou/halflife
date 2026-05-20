@@ -58,7 +58,7 @@ Ratio = `open_issues / max(stars, 1)`
 ```
 action.yml                        — GitHub Action metadata and input definitions
 tsconfig.json                     — TypeScript compiler config (ES2022, CommonJS, strict)
-package.json                      — devDependencies only; build script
+package.json                      — devDependencies only; build and test scripts
 src/
   index.ts                        — Orchestrator: loads inputs, wires modules, no business logic
   types.ts                        — Shared TypeScript interfaces and type aliases
@@ -68,20 +68,32 @@ src/
   score.ts                        — Pure scoring function: RawSignals → ScoredPackage
   output.ts                       — Formats Markdown report, writes to stdout + GITHUB_STEP_SUMMARY
 dist/                             — Compiled JavaScript output; committed to repo
+test/
+  score.test.ts                   — Unit tests for scoring logic (recency, pressure, base health, status bands)
+  registry.test.ts                — Unit tests for registry filtering logic (mocked fetch)
+  fixtures/
+    package.json                  — Sample manifest used by the PR gate workflow
 .github/
   workflows/
-    ci.yml                        — Rebuilds dist/ and runs the self-check on src/ changes
+    pr.yml                        — Rebuilds dist/ and runs the self-check against test fixtures on every PR
     release.yml                   — Updates the floating major version tag on GitHub release
 ```
 
 ## Building
 
-`dist/` is managed automatically by CI — it rebuilds and commits `dist/index.js` whenever `src/` changes on `main`. For local development only:
+`dist/` is managed automatically by CI — it rebuilds and commits `dist/index.js` on every PR. For local development only:
 
 ```bash
 npm install
 npm run build
 # Bundles src/ into a single dist/index.js via @vercel/ncc
+```
+
+## Running tests
+
+```bash
+npm test
+# Runs the Vitest suite (test/score.test.ts and test/registry.test.ts)
 ```
 
 ## Running locally

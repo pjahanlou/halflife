@@ -31118,8 +31118,23 @@ async function fetchRepoSignals(packageName, slug, token) {
 }
 async function fetchAllRepoSignals(packages, token) {
     const results = new Map();
-    for (const { name, slug } of packages) {
-        results.set(name, await fetchRepoSignals(name, slug, token));
+    const CONCURRENCY = 5;
+    for (let i = 0; i < packages.length; i += CONCURRENCY) {
+        const batch = packages.slice(i, i + CONCURRENCY);
+        const settled = await Promise.allSettled(batch.map(({ name, slug }) => fetchRepoSignals(name, slug, token)));
+        for (let j = 0; j < batch.length; j++) {
+            const { name } = batch[j];
+            const result = settled[j];
+            if (result.status === 'fulfilled') {
+                results.set(name, result.value);
+            }
+            else {
+                core.warning(`Could not fetch GitHub signals for ${name}: ${String(result.reason)}`);
+                results.set(name, {
+                    skipped: { name, reason: 'untrackable', detail: String(result.reason) },
+                });
+            }
+        }
     }
     return results;
 }
@@ -31288,7 +31303,7 @@ function formatTable(packages) {
             `| ${STATUS_EMOJI[pkg.status]} ${pkg.status} ` +
             `| ${pkg.days_since_push} ` +
             `| ${pkg.open_issues} ` +
-            `| ${pkg.top_signal} |`);
+            `| ${pkg.signals.join(' · ')} |`);
     }
     return lines.join('\n');
 }
@@ -31329,10 +31344,10 @@ function buildReport(scored, skipped, failThreshold, warnThreshold) {
     const failing = scored.filter((p) => p.status === 'ARCHIVED' || p.score < failThreshold);
     const warning = scored.filter((p) => p.status !== 'ARCHIVED' && p.score >= failThreshold && p.score < warnThreshold);
     if (failing.length > 0) {
-        lines.push('### Failure Summary', `The following ${failing.length} package(s) are ARCHIVED or scored below the fail threshold (${failThreshold}):`, ...failing.map((p) => `- \`${p.name}\` — score **${p.score}** (${p.status}): ${p.top_signal}`), '');
+        lines.push('### Failure Summary', `The following ${failing.length} package(s) are ARCHIVED or scored below the fail threshold (${failThreshold}):`, ...failing.map((p) => `- \`${p.name}\` — score **${p.score}** (${p.status}): ${p.signals.join(' · ')}`), '');
     }
     if (warning.length > 0) {
-        lines.push('### Warning Summary', `The following ${warning.length} package(s) scored below the warn threshold (${warnThreshold}):`, ...warning.map((p) => `- \`${p.name}\` — score **${p.score}** (${p.status}): ${p.top_signal}`), '');
+        lines.push('### Warning Summary', `The following ${warning.length} package(s) scored below the warn threshold (${warnThreshold}):`, ...warning.map((p) => `- \`${p.name}\` — score **${p.score}** (${p.status}): ${p.signals.join(' · ')}`), '');
     }
     return { content: lines.join('\n'), failing, warning };
 }
@@ -31340,10 +31355,10 @@ async function writeOutput(scored, skipped, failThreshold, warnThreshold) {
     const { content, failing, warning } = buildReport(scored, skipped, failThreshold, warnThreshold);
     await core.summary.addRaw(content, true).write();
     for (const pkg of warning) {
-        core.warning(`${pkg.name} scored ${pkg.score} (${pkg.status}): ${pkg.top_signal}`);
+        core.warning(`${pkg.name} scored ${pkg.score} (${pkg.status}): ${pkg.signals.join(' · ')}`);
     }
     for (const pkg of failing) {
-        core.error(`${pkg.name} scored ${pkg.score} (${pkg.status}): ${pkg.top_signal}`);
+        core.error(`${pkg.name} scored ${pkg.score} (${pkg.status}): ${pkg.signals.join(' · ')}`);
     }
     return failing.length > 0;
 }
@@ -31418,12 +31433,46 @@ function parseManifest(inputs) {
 /***/ }),
 
 /***/ 2976:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.resolvePackages = resolvePackages;
+const core = __importStar(__nccwpck_require__(7484));
 function cleanGitUrl(raw) {
     const url = raw
         .replace(/^git\+https?:\/\//, 'https://')
@@ -31520,6 +31569,7 @@ async function resolvePackages(names, inputs) {
                 results.set(name, result.value);
             }
             else {
+                core.warning(`Could not resolve ${name}: ${String(result.reason)}`);
                 results.set(name, {
                     skipped: { name, reason: 'untrackable', detail: String(result.reason) },
                 });
@@ -31538,37 +31588,36 @@ async function resolvePackages(names, inputs) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.statusBand = statusBand;
 exports.scorePackage = scorePackage;
 function daysSince(isoDate) {
     return Math.floor((Date.now() - new Date(isoDate).getTime()) / (1000 * 60 * 60 * 24));
 }
 function recencyScore(days) {
     if (days <= 30)
-        return { points: 50, signal: null };
+        return { points: 50, signal: `Last commit ${days} days ago — healthy` };
     if (days <= 60)
-        return { points: 40, signal: `Last push ${days} days ago` };
+        return { points: 40, signal: `No commits in ${days} days` };
     if (days <= 90)
-        return { points: 30, signal: `Last push ${days} days ago` };
+        return { points: 30, signal: `No commits in ${days} days` };
     if (days <= 180)
-        return { points: 15, signal: `Last push ${days} days ago` };
+        return { points: 15, signal: `No commits in ${days} days` };
     if (days <= 365)
-        return { points: 5, signal: `Last push ${days} days ago` };
-    return { points: 0, signal: `No push in over a year (${days} days)` };
+        return { points: 5, signal: `No commits in ${days} days` };
+    return { points: 0, signal: `No commits in ${days} days` };
 }
-function issuePressureScore(openIssues, stars) {
-    const ratio = openIssues / Math.max(stars, 1);
+function issuePressureScore(ratio) {
     if (ratio < 0.05)
         return { points: 30, signal: null };
     if (ratio < 0.15)
-        return { points: 20, signal: `Issue ratio ${ratio.toFixed(2)} (moderate)` };
+        return { points: 20, signal: `High issue-to-star ratio (${ratio.toFixed(2)})` };
     if (ratio < 0.30)
-        return { points: 10, signal: `High issue ratio ${ratio.toFixed(2)}` };
-    return { points: 0, signal: `Very high issue ratio ${ratio.toFixed(2)} (${openIssues} open issues)` };
+        return { points: 10, signal: `High issue-to-star ratio (${ratio.toFixed(2)})` };
+    return { points: 0, signal: `High issue-to-star ratio (${ratio.toFixed(2)})` };
 }
 function baseHealthScore(openIssues) {
-    if (openIssues > 500) {
-        return { points: 10, signal: `${openIssues} open issues (high absolute count)` };
-    }
+    if (openIssues > 500)
+        return { points: 10, signal: `${openIssues} open issues` };
     return { points: 20, signal: null };
 }
 function statusBand(score) {
@@ -31580,39 +31629,40 @@ function statusBand(score) {
         return 'CONCERN';
     return 'AT RISK';
 }
-function scorePackage(signals) {
-    if (signals.archived) {
+function scorePackage(raw) {
+    if (raw.archived) {
         return {
-            name: signals.name,
-            repo: signals.repo,
+            name: raw.name,
+            repo: raw.repo,
             score: 0,
             status: 'ARCHIVED',
-            days_since_push: daysSince(signals.pushed_at),
-            open_issues: signals.open_issues_count,
-            top_signal: 'Repository is archived',
+            days_since_push: daysSince(raw.pushed_at),
+            open_issues: raw.open_issues_count,
+            signals: ['Repository is archived'],
         };
     }
-    const days = daysSince(signals.pushed_at);
+    const days = daysSince(raw.pushed_at);
+    const ratio = raw.open_issues_count / Math.max(raw.stargazers_count, 1);
     const recency = recencyScore(days);
-    const pressure = issuePressureScore(signals.open_issues_count, signals.stargazers_count);
-    const base = baseHealthScore(signals.open_issues_count);
+    const pressure = issuePressureScore(ratio);
+    const base = baseHealthScore(raw.open_issues_count);
     const score = recency.points + pressure.points + base.points;
-    const negativeSignals = [];
-    if (recency.signal)
-        negativeSignals.push({ signal: recency.signal, deduction: 50 - recency.points });
+    const signalEntries = [
+        { text: recency.signal, deduction: 50 - recency.points },
+    ];
     if (pressure.signal)
-        negativeSignals.push({ signal: pressure.signal, deduction: 30 - pressure.points });
+        signalEntries.push({ text: pressure.signal, deduction: 30 - pressure.points });
     if (base.signal)
-        negativeSignals.push({ signal: base.signal, deduction: 20 - base.points });
-    negativeSignals.sort((a, b) => b.deduction - a.deduction);
+        signalEntries.push({ text: base.signal, deduction: 20 - base.points });
+    signalEntries.sort((a, b) => b.deduction - a.deduction);
     return {
-        name: signals.name,
-        repo: signals.repo,
+        name: raw.name,
+        repo: raw.repo,
         score,
         status: statusBand(score),
         days_since_push: days,
-        open_issues: signals.open_issues_count,
-        top_signal: negativeSignals.length > 0 ? negativeSignals[0].signal : 'No major issues detected',
+        open_issues: raw.open_issues_count,
+        signals: signalEntries.slice(0, 3).map(e => e.text),
     };
 }
 

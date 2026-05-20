@@ -1,0 +1,14 @@
+{
+  "name": "halflife-test-fixture",
+  "private": true,
+  "dependencies": {
+    "axios": "*",
+    "moment": "*",
+    "request": "*",
+    "lodash": "*",
+    "pkginfo": "*",
+    "grunt": "*",
+    "zod": "*",
+    "node-fetch": "*"
+  }
+}

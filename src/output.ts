@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as core from '@actions/core';
 import { ScoredPackage, SkippedPackage } from './types';
 
 const STATUS_EMOJI: Record<ScoredPackage['status'], string> = {
@@ -48,7 +48,7 @@ function buildReport(
   skipped: SkippedPackage[],
   failThreshold: number,
   warnThreshold: number
-): { content: string; exitCode: number } {
+): { content: string; failing: ScoredPackage[]; warning: ScoredPackage[] } {
   const date = new Date().toISOString().split('T')[0];
   const total = scored.length + skipped.length;
   const lines: string[] = [
@@ -74,8 +74,6 @@ function buildReport(
     (p) => p.status !== 'ARCHIVED' && p.score >= failThreshold && p.score < warnThreshold
   );
 
-  let exitCode = 0;
-
   if (failing.length > 0) {
     lines.push(
       '### Failure Summary',
@@ -83,7 +81,6 @@ function buildReport(
       ...failing.map((p) => `- \`${p.name}\` — score **${p.score}** (${p.status}): ${p.top_signal}`),
       ''
     );
-    exitCode = 1;
   }
 
   if (warning.length > 0) {
@@ -95,27 +92,25 @@ function buildReport(
     );
   }
 
-  return { content: lines.join('\n'), exitCode };
+  return { content: lines.join('\n'), failing, warning };
 }
 
-export function writeOutput(
+export async function writeOutput(
   scored: ScoredPackage[],
   skipped: SkippedPackage[],
   failThreshold: number,
   warnThreshold: number
-): void {
-  const { content, exitCode } = buildReport(scored, skipped, failThreshold, warnThreshold);
+): Promise<boolean> {
+  const { content, failing, warning } = buildReport(scored, skipped, failThreshold, warnThreshold);
 
-  console.log(content);
+  await core.summary.addRaw(content, true).write();
 
-  const summaryPath = process.env['GITHUB_STEP_SUMMARY'];
-  if (summaryPath) {
-    try {
-      fs.appendFileSync(summaryPath, content + '\n');
-    } catch (err) {
-      console.error(`[halflife] Failed to write to GITHUB_STEP_SUMMARY: ${err}`);
-    }
+  for (const pkg of warning) {
+    core.warning(`${pkg.name} scored ${pkg.score} (${pkg.status}): ${pkg.top_signal}`);
+  }
+  for (const pkg of failing) {
+    core.error(`${pkg.name} scored ${pkg.score} (${pkg.status}): ${pkg.top_signal}`);
   }
 
-  process.exit(exitCode);
+  return failing.length > 0;
 }

@@ -1,3 +1,4 @@
+import * as core from '@actions/core';
 import { RawSignals, SkippedPackage } from './types';
 
 export type GitHubResult =
@@ -41,9 +42,7 @@ export async function fetchRepoSignals(
 
   const remainingNum = parseInt(remaining, 10);
   if (!isNaN(remainingNum) && remainingNum < 100) {
-    console.log(
-      `[halflife] Rate limit warning: ${remaining} requests remaining, resets at ${resetToIso(reset)}`
-    );
+    core.warning(`Rate limit low: ${remaining} requests remaining, resets at ${resetToIso(reset)}`);
   }
 
   if (res.status === 404) {

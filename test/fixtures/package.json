@@ -6,7 +6,7 @@
     "moment": "*",
     "request": "*",
     "lodash": "*",
-    "bower": "*",
+    "q": "*",
     "grunt": "*",
     "zod": "*",
     "node-fetch": "*"

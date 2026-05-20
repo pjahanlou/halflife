@@ -125,7 +125,7 @@ Packages that cannot be meaningfully tracked are excluded from scoring and liste
 The action writes a Markdown report to `GITHUB_STEP_SUMMARY` (visible in the Actions UI under the job summary tab) and to stdout. The report includes:
 
 - A summary line: `Scanned N packages — Y tracked, Z skipped`
-- A table of scored packages sorted by score ascending (worst first)
+- A table of scored packages sorted by score ascending (worst first), with a Signal column showing up to three contributing factors ordered by impact (e.g. `No commits in 280 days · High issue-to-star ratio (0.42)`)
 - A collapsible list of skipped packages with reasons
 - A failure summary if any package is archived or below `fail-threshold`
 - A warning summary if any package is below `warn-threshold`

@@ -1,18 +1,25 @@
 import * as core from '@actions/core';
+import { z } from 'zod';
 import { ActionInputs, SkippedPackage } from './types';
 
 export type RegistryResult =
   | { slug: string }
   | { skipped: SkippedPackage };
 
-interface NpmPackage {
-  repository?: { url?: string };
-  license?: string | { type?: string };
-}
+const NpmPackageSchema = z.object({
+  repository: z.object({ url: z.string().optional() }).optional(),
+  license: z.union([
+    z.string(),
+    z.object({ type: z.string().optional() }),
+    z.array(z.union([z.string(), z.object({ type: z.string().optional() })])),
+  ]).optional(),
+});
 
-interface NpmDownloads {
-  downloads?: number;
-}
+const NpmDownloadsSchema = z.object({
+  downloads: z.number().optional(),
+});
+
+type NpmPackage = z.infer<typeof NpmPackageSchema>;
 
 function cleanGitUrl(raw: string): string | null {
   const url = raw
@@ -22,15 +29,24 @@ function cleanGitUrl(raw: string): string | null {
     .replace(/^ssh:\/\/git@/, 'https://')
     .replace(/\.git$/, '');
 
-  const match = url.match(/github\.com[/:]([^/]+\/[^/]+)/);
+  const match = url.match(/github\.com[/:]([^/]+\/[^/#?]+)/);
   if (!match) return null;
   return match[1];
 }
 
 function getLicenseString(license: NpmPackage['license']): string {
   if (!license) return '';
+
   if (typeof license === 'string') return license;
-  if (typeof license === 'object' && license.type) return license.type;
+
+  if (Array.isArray(license)) {
+    const types = license
+      .map(entry => (typeof entry === 'string' ? entry : entry.type ?? ''))
+      .filter(Boolean);
+    return types.join(' OR ');
+  }
+
+  if (license.type) return license.type;
   return '';
 }
 
@@ -39,19 +55,19 @@ function encodePackageName(name: string): string {
 }
 
 async function fetchRegistry(name: string): Promise<NpmPackage> {
-  const url = `https://registry.npmjs.org/${encodePackageName(name)}`;
+  const url = `https://registry.npmjs.org/${encodePackageName(name)}/latest`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`npm registry returned ${res.status} for ${name}`);
   }
-  return res.json() as Promise<NpmPackage>;
+  return NpmPackageSchema.parse(await res.json());
 }
 
 async function fetchDownloads(name: string): Promise<number> {
   const url = `https://api.npmjs.org/downloads/point/last-month/${encodePackageName(name)}`;
   const res = await fetch(url);
   if (!res.ok) return 0;
-  const data = (await res.json()) as NpmDownloads;
+  const data = NpmDownloadsSchema.parse(await res.json());
   return data.downloads ?? 0;
 }
 
@@ -91,7 +107,7 @@ async function resolvePackage(name: string, inputs: ActionInputs): Promise<Regis
   }
 
   const downloads = await fetchDownloads(name);
-  if (downloads > inputs.downloadFloor) {
+  if (downloads >= inputs.downloadFloor) {
     return {
       skipped: {
         name,

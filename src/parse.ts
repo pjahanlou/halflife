@@ -16,7 +16,8 @@ export function parseManifest(inputs: ActionInputs): string[] {
     const block = manifest[section];
     if (block && typeof block === 'object') {
       for (const [name, value] of Object.entries(block as Record<string, string>)) {
-        if (typeof value === 'string' && (value.startsWith('file:') || value.startsWith('git+'))) {
+        const localPrefixes = ['file:', 'git+', 'workspace:', 'npm:', 'link:', 'github:', 'http:', 'https:'];
+        if (typeof value === 'string' && localPrefixes.some(p => value.startsWith(p))) {
           continue;
         }
         names.add(name);

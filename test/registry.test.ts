@@ -11,6 +11,10 @@ const inputs: ActionInputs = {
   failThreshold: 30,
   warnThreshold: 60,
   downloadFloor: 500000,
+  ignorePackages: [],
+  commentOnPr: false,
+  outputFormat: 'markdown',
+  weights: { recency: 50, pressure: 30, base: 20 },
 };
 
 function mockFetch(...responses: Array<{ ok: boolean; data: unknown; status?: number }>) {
@@ -74,6 +78,15 @@ describe('resolvePackages filtering', () => {
     expect('slug' in result && result.slug).toBe('org/pkg');
   });
 
+  it('valid GitHub URL, MIT license, downloads at floor → established', async () => {
+    mockFetch(
+      { ok: true, data: { repository: { url: 'https://github.com/org/pkg' }, license: 'MIT' } },
+      { ok: true, data: { downloads: 500000 } },
+    );
+    const result = await resolve('pkg');
+    expect('skipped' in result && result.skipped.reason).toBe('established');
+  });
+
   it('valid GitHub URL, MIT license, downloads above floor → established', async () => {
     mockFetch(
       { ok: true, data: { repository: { url: 'https://github.com/org/pkg' }, license: 'MIT' } },
@@ -99,5 +112,42 @@ describe('resolvePackages filtering', () => {
     );
     const result = await resolve('pkg');
     expect('slug' in result && result.slug).toBe('org/pkg');
+  });
+
+  it('URL with fragment → fragment excluded from slug', async () => {
+    mockFetch(
+      { ok: true, data: { repository: { url: 'https://github.com/org/pkg#readme' }, license: 'MIT' } },
+      { ok: true, data: { downloads: 100 } },
+    );
+    const result = await resolve('pkg');
+    expect('slug' in result && result.slug).toBe('org/pkg');
+  });
+
+  it('scoped package name resolves correctly', async () => {
+    mockFetch(
+      { ok: true, data: { repository: { url: 'https://github.com/org/pkg' }, license: 'MIT' } },
+      { ok: true, data: { downloads: 100 } },
+    );
+    const map = await resolvePackages(['@scope/pkg'], inputs);
+    const result = map.get('@scope/pkg')!;
+    expect('slug' in result && result.slug).toBe('org/pkg');
+  });
+
+  it('fetchDownloads returning non-ok → defaults to 0, not skipped as established', async () => {
+    mockFetch(
+      { ok: true, data: { repository: { url: 'https://github.com/org/pkg' }, license: 'MIT' } },
+      { ok: false, data: {}, status: 500 },
+    );
+    const result = await resolve('pkg');
+    expect('slug' in result).toBe(true);
+  });
+
+  it('license as legacy array → joined with OR', async () => {
+    mockFetch(
+      { ok: true, data: { repository: { url: 'https://github.com/org/pkg' }, license: [{ type: 'MIT' }, { type: 'Apache-2.0' }] } },
+      { ok: true, data: { downloads: 100 } },
+    );
+    const result = await resolve('pkg');
+    expect('slug' in result).toBe(true);
   });
 });

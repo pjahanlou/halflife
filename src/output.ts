@@ -1,5 +1,5 @@
 import * as core from '@actions/core';
-import { ScoredPackage, SkippedPackage } from './types';
+import { ActionInputs, ScoredPackage, SkippedPackage } from './types';
 
 const STATUS_EMOJI: Record<ScoredPackage['status'], string> = {
   HEALTHY:   ':green_circle:',
@@ -9,26 +9,29 @@ const STATUS_EMOJI: Record<ScoredPackage['status'], string> = {
   ARCHIVED:  ':black_circle:',
 };
 
-function formatTable(packages: ScoredPackage[]): string {
+const escPipe = (s: string) => s.replace(/\|/g, '\\|');
+
+export function formatTable(packages: ScoredPackage[]): string {
   const lines: string[] = [
     '| Package | Score | Status | Days Since Push | Open Issues | Signal |',
     '|---------|------:|--------|----------------:|------------:|--------|',
   ];
   const sorted = [...packages].sort((a, b) => a.score - b.score);
   for (const pkg of sorted) {
+    const dsp = pkg.days_since_push < 0 ? 'N/A' : String(pkg.days_since_push);
     lines.push(
-      `| [\`${pkg.name}\`](https://github.com/${pkg.repo}) ` +
+      `| [\`${escPipe(pkg.name)}\`](https://github.com/${escPipe(pkg.repo)}) ` +
       `| ${pkg.score} ` +
       `| ${STATUS_EMOJI[pkg.status]} ${pkg.status} ` +
-      `| ${pkg.days_since_push} ` +
+      `| ${dsp} ` +
       `| ${pkg.open_issues} ` +
-      `| ${pkg.signals.join(' · ')} |`
+      `| ${escPipe(pkg.signals.join(' · '))} |`
     );
   }
   return lines.join('\n');
 }
 
-function formatSkipped(skipped: SkippedPackage[]): string {
+export function formatSkipped(skipped: SkippedPackage[]): string {
   if (skipped.length === 0) return '';
   const lines: string[] = [
     `<details><summary>Skipped packages (${skipped.length})</summary>`,
@@ -37,13 +40,13 @@ function formatSkipped(skipped: SkippedPackage[]): string {
     '|---------|--------|--------|',
   ];
   for (const pkg of skipped) {
-    lines.push(`| \`${pkg.name}\` | ${pkg.reason} | ${pkg.detail ?? ''} |`);
+    lines.push(`| \`${escPipe(pkg.name)}\` | ${escPipe(pkg.reason)} | ${escPipe(pkg.detail ?? '')} |`);
   }
   lines.push('', '</details>');
   return lines.join('\n');
 }
 
-function buildReport(
+export function buildReport(
   scored: ScoredPackage[],
   skipped: SkippedPackage[],
   failThreshold: number,
@@ -78,7 +81,7 @@ function buildReport(
     lines.push(
       '### Failure Summary',
       `The following ${failing.length} package(s) are ARCHIVED or scored below the fail threshold (${failThreshold}):`,
-      ...failing.map((p) => `- \`${p.name}\` — score **${p.score}** (${p.status}): ${p.signals.join(' · ')}`),
+      ...failing.map((p) => `- \`${escPipe(p.name)}\` — score **${p.score}** (${p.status}): ${escPipe(p.signals.join(' · '))}`),
       ''
     );
   }
@@ -87,7 +90,7 @@ function buildReport(
     lines.push(
       '### Warning Summary',
       `The following ${warning.length} package(s) scored below the warn threshold (${warnThreshold}):`,
-      ...warning.map((p) => `- \`${p.name}\` — score **${p.score}** (${p.status}): ${p.signals.join(' · ')}`),
+      ...warning.map((p) => `- \`${escPipe(p.name)}\` — score **${p.score}** (${p.status}): ${escPipe(p.signals.join(' · '))}`),
       ''
     );
   }
@@ -95,15 +98,30 @@ function buildReport(
   return { content: lines.join('\n'), failing, warning };
 }
 
+export function buildJsonReport(
+  scored: ScoredPackage[],
+  skipped: SkippedPackage[]
+): string {
+  return JSON.stringify({ scored, skipped }, null, 2);
+}
+
 export async function writeOutput(
   scored: ScoredPackage[],
   skipped: SkippedPackage[],
-  failThreshold: number,
-  warnThreshold: number
+  inputs: ActionInputs
 ): Promise<boolean> {
-  const { content, failing, warning } = buildReport(scored, skipped, failThreshold, warnThreshold);
+  const { content, failing, warning } = buildReport(scored, skipped, inputs.failThreshold, inputs.warnThreshold);
+  const format = inputs.outputFormat;
 
-  await core.summary.addRaw(content, true).write();
+  if (format === 'markdown' || format === 'both') {
+    await core.summary.addRaw(content, true).write();
+  }
+
+  if (format === 'json' || format === 'both') {
+    const json = buildJsonReport(scored, skipped);
+    core.info(json);
+    core.setOutput('report-json', json);
+  }
 
   for (const pkg of warning) {
     core.warning(`${pkg.name} scored ${pkg.score} (${pkg.status}): ${pkg.signals.join(' · ')}`);

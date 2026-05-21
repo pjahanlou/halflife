@@ -205,20 +205,24 @@ When `comment-on-pr` is `true`, the Markdown report is posted as a comment on th
 
 ## Local testing
 
-```bash
-export INPUT_GITHUB-TOKEN="ghp_your_token"
-export INPUT_MANIFEST-FILE="package.json"
-export INPUT_INCLUDE-DEV="false"
-export INPUT_FAIL-THRESHOLD="30"
-export INPUT_WARN-THRESHOLD="60"
-export INPUT_DOWNLOAD-FLOOR="500000"
-export INPUT_IGNORE-PACKAGES=""
-export INPUT_COMMENT-ON-PR="false"
-export INPUT_OUTPUT-FORMAT="markdown"
-export INPUT_RECENCY-WEIGHT="50"
-export INPUT_PRESSURE-WEIGHT="30"
-export INPUT_BASE-WEIGHT="20"
-export GITHUB_STEP_SUMMARY="/tmp/halflife-summary.md"
+Copy the example environment file and fill in your GitHub token:
 
-node dist/index.js
+```bash
+cp .env.example .env
+# Edit .env and set INPUT_GITHUB-TOKEN to a valid personal access token
 ```
+
+If you've made changes to `src/`, rebuild before running:
+
+```bash
+npm run build
+```
+
+Run the action locally:
+
+```bash
+node --env-file=.env dist/index.js
+cat /tmp/halflife-summary.md
+```
+
+Point `INPUT_MANIFEST-FILE` in `.env` at any `package.json` you want to analyze — it does not have to be this repo's own file.

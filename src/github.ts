@@ -1,16 +1,24 @@
 import * as core from '@actions/core';
+import { z } from 'zod';
 import { RawSignals, SkippedPackage } from './types';
 
 export type GitHubResult =
   | { signals: RawSignals }
   | { skipped: SkippedPackage };
 
-interface GitHubRepo {
-  archived: boolean;
-  pushed_at: string;
-  open_issues_count: number;
-  stargazers_count: number;
+export class RateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RateLimitError';
+  }
 }
+
+const GitHubRepoSchema = z.object({
+  archived: z.boolean(),
+  pushed_at: z.string().nullable(),
+  open_issues_count: z.number(),
+  stargazers_count: z.number(),
+});
 
 function parseRateLimitHeaders(res: Response): { remaining: string; reset: string } {
   return {
@@ -52,7 +60,7 @@ export async function fetchRepoSignals(
   }
 
   if (res.status === 403 || res.status === 429) {
-    throw new Error(
+    throw new RateLimitError(
       `GitHub API rate limit hit for ${slug}. ` +
         `x-ratelimit-remaining: ${remaining}, ` +
         `x-ratelimit-reset: ${reset} (${resetToIso(reset)})`
@@ -63,7 +71,7 @@ export async function fetchRepoSignals(
     throw new Error(`GitHub API returned ${res.status} for ${slug}`);
   }
 
-  const data = (await res.json()) as GitHubRepo;
+  const data = GitHubRepoSchema.parse(await res.json());
 
   return {
     signals: {
@@ -92,13 +100,16 @@ export async function fetchAllRepoSignals(
     for (let j = 0; j < batch.length; j++) {
       const { name } = batch[j];
       const result = settled[j];
-      if (result.status === 'fulfilled') {
-        results.set(name, result.value);
-      } else {
+      if (result.status === 'rejected') {
+        if (result.reason instanceof RateLimitError) {
+          throw result.reason;
+        }
         core.warning(`Could not fetch GitHub signals for ${name}: ${String(result.reason)}`);
         results.set(name, {
           skipped: { name, reason: 'untrackable', detail: String(result.reason) },
         });
+      } else {
+        results.set(name, result.value);
       }
     }
   }

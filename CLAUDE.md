@@ -5,18 +5,28 @@ Halflife is a GitHub Action that scores the health of your open-source npm depen
 ## What it does
 
 1. Parses your `package.json` to extract dependency names.
-2. For each package, calls the npm registry to find its GitHub repository URL.
-3. Filters out packages that are proprietary, have no GitHub repo, or exceed the download floor (they have institutional maintenance guarantees).
+2. For each package, calls the npm registry (`/latest` endpoint) to find its GitHub repository URL and license.
+3. Filters out packages that are proprietary, have no GitHub repo, are in the ignore list, or meet/exceed the download floor (they have institutional maintenance guarantees).
 4. Fetches live GitHub repo signals: last push date, open issue count, star count, archived status.
-5. Scores each package 0–100 based on three components (see Scoring Model below).
-6. Writes a Markdown report to the GitHub Job Summary and stdout.
-7. Exits with code 1 if any package is ARCHIVED or scores below `fail-threshold`.
+5. Scores each package based on three weighted components (see Scoring Model below). Default weights total 100 points.
+6. Builds a signals array (up to 3, sorted by severity) explaining the score.
+7. Writes a report to the GitHub Job Summary and/or stdout. Supports Markdown, JSON, or both formats.
+8. Optionally posts results as a PR comment (when `comment-on-pr` is enabled).
+9. Exits with code 1 if any package is ARCHIVED or scores below `fail-threshold`.
+
+## Input Validation
+
+All numeric inputs (`fail-threshold`, `warn-threshold`, `download-floor`, `recency-weight`, `pressure-weight`, `base-weight`) must be valid non-negative integers. The action errors immediately if any numeric input is NaN or negative.
+
+## Version Protocol Filtering
+
+The following version prefixes in `package.json` are filtered out and not sent to the npm registry: `file:`, `git+`, `workspace:`, `npm:`, `link:`, `github:`, `http:`, `https:`.
 
 ## Scoring Model
 
-Scores are composed of three weighted components totalling 100 points.
+Scores are composed of three weighted components. Weights are configurable via `recency-weight`, `pressure-weight`, and `base-weight` inputs. Default weights total 100 points.
 
-### Component 1: Commit Recency (50 points)
+### Component 1: Commit Recency (default 50 points)
 
 | Days Since Last Push | Points |
 |---------------------:|-------:|
@@ -27,7 +37,9 @@ Scores are composed of three weighted components totalling 100 points.
 | 181–365              | 5      |
 | 365+                 | 0      |
 
-### Component 2: Issue Pressure (30 points)
+Points are scaled proportionally when `recency-weight` differs from 50.
+
+### Component 2: Issue Pressure (default 30 points)
 
 Ratio = `open_issues / max(stars, 1)`
 
@@ -36,52 +48,62 @@ Ratio = `open_issues / max(stars, 1)`
 | < 0.05    | 30     |
 | 0.05–0.15 | 20     |
 | 0.15–0.30 | 10     |
-| > 0.30    | 0      |
+| >= 0.30   | 0      |
 
-### Component 3: Base Health (20 points)
+Points are scaled proportionally when `pressure-weight` differs from 30.
+
+### Component 3: Base Health (default 20 points)
 
 - 20 points by default
 - Deduct 10 if `open_issues_count > 500`
 
+Points are scaled proportionally when `base-weight` differs from 20.
+
 ### Status Bands
 
-| Score Range | Status   |
-|------------:|----------|
-| 80–100      | HEALTHY  |
-| 60–79       | WATCH    |
-| 40–59       | CONCERN  |
-| 0–39        | AT RISK  |
-| archived    | ARCHIVED |
+Status is determined by the percentage of max possible score (sum of weights):
+
+| Score % | Status   |
+|--------:|----------|
+| 80–100% | HEALTHY  |
+| 60–79%  | WATCH    |
+| 40–59%  | CONCERN  |
+| 0–39%   | AT RISK  |
+| —       | ARCHIVED |
 
 ## File Structure
 
 ```
 action.yml                        — GitHub Action metadata and input definitions
 tsconfig.json                     — TypeScript compiler config (ES2022, CommonJS, strict)
-package.json                      — devDependencies only; build and test scripts
+package.json                      — Dependencies and devDependencies; build and test scripts
 src/
-  index.ts                        — Orchestrator: loads inputs, wires modules, no business logic
+  index.ts                        — Orchestrator: loads inputs, validates, wires modules
   types.ts                        — Shared TypeScript interfaces and type aliases
   parse.ts                        — Reads and parses package.json; returns dep name list
-  registry.ts                     — npm registry calls; resolves repo slug or skip reason
-  github.ts                       — GitHub REST API calls; returns raw signals per repo
-  score.ts                        — Pure scoring function: RawSignals → ScoredPackage
-  output.ts                       — Formats Markdown report, writes to stdout + GITHUB_STEP_SUMMARY
+  registry.ts                     — npm registry calls; resolves repo slug or skip reason (zod-validated)
+  github.ts                       — GitHub REST API calls; returns raw signals per repo (zod-validated)
+  score.ts                        — Pure scoring function: RawSignals → ScoredPackage (configurable weights)
+  output.ts                       — Formats Markdown/JSON report, writes to stdout + GITHUB_STEP_SUMMARY
+  comment.ts                      — Posts/updates PR comments via GitHub REST API
 dist/                             — Compiled JavaScript output; committed to repo
 test/
-  score.test.ts                   — Unit tests for scoring logic (recency, pressure, base health, status bands)
+  score.test.ts                   — Unit tests for scoring logic (recency, pressure, base health, status bands, weights)
   registry.test.ts                — Unit tests for registry filtering logic (mocked fetch)
+  parse.test.ts                   — Unit tests for manifest parsing (protocol filtering, deduplication)
+  output.test.ts                  — Unit tests for report formatting (table, skipped, JSON output)
+  github.test.ts                  — Unit tests for GitHub API client (rate limits, 404, validation)
   fixtures/
     package.json                  — Sample manifest used by the PR gate workflow
 .github/
   workflows/
-    pr.yml                        — Rebuilds dist/ and runs the self-check against test fixtures on every PR
+    pr.yml                        — Runs tests, rebuilds dist/, runs self-check against test fixtures on every PR
     release.yml                   — Updates the floating major version tag on GitHub release
 ```
 
 ## Building
 
-`dist/` is managed automatically by CI — it rebuilds and commits `dist/index.js` on every PR. For local development only:
+`dist/` is managed automatically by CI — it rebuilds and commits `dist/index.js` on every PR (same-repo PRs only). For local development only:
 
 ```bash
 npm install
@@ -93,7 +115,7 @@ npm run build
 
 ```bash
 npm test
-# Runs the Vitest suite (test/score.test.ts and test/registry.test.ts)
+# Runs the Vitest suite (5 test files, 79 tests)
 ```
 
 ## Running locally
@@ -107,6 +129,12 @@ export INPUT_INCLUDE-DEV="false"
 export INPUT_FAIL-THRESHOLD="30"
 export INPUT_WARN-THRESHOLD="60"
 export INPUT_DOWNLOAD-FLOOR="500000"
+export INPUT_IGNORE-PACKAGES=""
+export INPUT_COMMENT-ON-PR="false"
+export INPUT_OUTPUT-FORMAT="markdown"
+export INPUT_RECENCY-WEIGHT="50"
+export INPUT_PRESSURE-WEIGHT="30"
+export INPUT_BASE-WEIGHT="20"
 
 node dist/index.js
 ```

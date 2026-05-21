@@ -24,9 +24,33 @@ inputs:
     required: false
     default: '60'
   download-floor:
-    description: 'Monthly download count above which a package is skipped as established'
+    description: 'Monthly download count at or above which a package is skipped as established'
     required: false
     default: '500000'
+  ignore-packages:
+    description: 'Comma-separated list of package names to skip'
+    required: false
+    default: ''
+  comment-on-pr:
+    description: 'Post results as a PR comment (requires pull-requests: write permission)'
+    required: false
+    default: 'false'
+  output-format:
+    description: 'Output format: markdown (default), json, or both'
+    required: false
+    default: 'markdown'
+  recency-weight:
+    description: 'Maximum points for commit recency component'
+    required: false
+    default: '50'
+  pressure-weight:
+    description: 'Maximum points for issue pressure component'
+    required: false
+    default: '30'
+  base-weight:
+    description: 'Maximum points for base health component'
+    required: false
+    default: '20'
 
 runs:
   using: 'node20'

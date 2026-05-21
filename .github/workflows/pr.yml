@@ -19,10 +19,14 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Build dist/
+      - name: Install and build
         run: npm ci && npm run build
 
+      - name: Run tests
+        run: npm test
+
       - name: Commit dist/ if changed
+        if: github.event.pull_request.head.repo.full_name == github.repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
